@@ -1,0 +1,134 @@
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local players = game:GetService("Players")
+local lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local teleportCount = math.huge -- Không giới hạn TP
+local regenTime = 7 -- Thời gian hồi TP
+local isSkillEnabled = false -- Biến theo dõi trạng thái bật/tắt kỹ năng
+local lastHP = humanoid.Health
+local borderGui = {}
+
+-- Tạo GUI
+local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+
+-- Tạo thông báo
+local notificationFrame = Instance.new("Frame", gui)
+notificationFrame.Size = UDim2.new(0, 250, 0, 70)
+notificationFrame.Position = UDim2.new(1, -260, 1, -80) -- Chuyển sang góc dưới bên tay phải
+notificationFrame.BackgroundColor3 = Color3.new(1, 0, 0) -- Màu đỏ đậm
+notificationFrame.BackgroundTransparency = 0.5 -- Giữ tính trong suốt
+
+local titleLabel = Instance.new("TextLabel", notificationFrame)
+titleLabel.Size = UDim2.new(1, 0, 0.5, 0)
+titleLabel.Text = "script created by HAPPY_script"
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = Color3.new(0, 0, 0) -- Màu chữ đen
+titleLabel.TextScaled = true
+titleLabel.TextSize = 20 -- Chữ lớn hơn dòng thứ hai
+
+local subtitleLabel = Instance.new("TextLabel", notificationFrame)
+subtitleLabel.Size = UDim2.new(1, 0, 0.5, 0)
+subtitleLabel.Position = UDim2.new(0, 0, 0.5, 0)
+subtitleLabel.Text = "Press G to FLASH, press H to turn on OBSERVE HAKI."
+subtitleLabel.BackgroundTransparency = 1
+subtitleLabel.TextColor3 = Color3.new(0, 0, 0) -- Màu chữ đen
+subtitleLabel.TextScaled = true
+
+-- Hiệu ứng màu vàng cho toàn màn hình
+local yellowTint = Instance.new("Frame", gui)
+yellowTint.Size = UDim2.new(1, 0, 1, 0)
+yellowTint.Position = UDim2.new(0, 0, 0, 0)
+yellowTint.BackgroundColor3 = Color3.new(1, 1, 0.6)
+yellowTint.BackgroundTransparency = 0.8
+yellowTint.Visible = false
+
+-- Tạo các viền và tên
+local function createBorderForPlayer(targetPlayer)
+    if targetPlayer == player then return end -- Không tạo viền cho chính mình
+
+    local char = targetPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local borderColor = Color3.new(0, 1, 0) -- Mặc định là màu xanh
+        if targetPlayer.TeamColor ~= player.TeamColor then
+            borderColor = Color3.new(1, 0, 0) -- Nếu không cùng đội, viền màu đỏ
+        end
+
+        -- Tạo billboard gui cho tên
+        local billboard = Instance.new("BillboardGui", gui)
+        billboard.Adornee = char:FindFirstChild("HumanoidRootPart")
+        billboard.Size = UDim2.new(0, 100, 0, 20)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.AlwaysOnTop = true
+
+        local nameLabel = Instance.new("TextLabel", billboard)
+        nameLabel.Size = UDim2.new(1, 0, 1, 0)
+        nameLabel.Text = targetPlayer.Name
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextColor3 = Color3.new(1, 1, 1)
+        nameLabel.TextScaled = true
+        nameLabel.TextSize = 10
+
+        -- Tạo box viền
+        local selectionBox = Instance.new("SelectionBox", gui)
+        selectionBox.Adornee = char
+        selectionBox.LineThickness = 0.05
+        selectionBox.Color3 = borderColor
+
+        -- Lưu các viền đã tạo để xóa sau khi tắt
+        table.insert(borderGui, {billboard, selectionBox})
+    end
+end
+
+-- Xóa viền và tên đã tạo
+local function clearBorders()
+    for _, guiElements in pairs(borderGui) do
+        for _, element in pairs(guiElements) do
+            element:Destroy()
+        end
+    end
+    borderGui = {}
+end
+
+-- Kiểm tra mất HP và thực hiện teleport
+local function checkHP()
+    if not isSkillEnabled then return end
+    if humanoid.Health < lastHP and teleportCount > 0 then
+        local randomDirection = math.random(1, 2) == 1 and 100 or -100
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        
+        if humanoidRootPart then
+            -- Teleport ngẫu nhiên sang trái hoặc phải 100m
+            humanoidRootPart.CFrame = humanoidRootPart.CFrame + Vector3.new(randomDirection, 0, 0)
+            teleportCount = teleportCount - 1 -- Giảm số lượt TP
+        end
+    end
+    lastHP = humanoid.Health
+end
+
+-- Bật/tắt kỹ năng bằng phím H
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if input.KeyCode == Enum.KeyCode.H and not gameProcessedEvent then
+        isSkillEnabled = not isSkillEnabled
+        if isSkillEnabled then
+            yellowTint.Visible = true
+            RunService.Heartbeat:Connect(checkHP)
+            
+            for _, targetPlayer in pairs(players:GetPlayers()) do
+                createBorderForPlayer(targetPlayer)
+            end
+            players.PlayerAdded:Connect(createBorderForPlayer)
+
+            -- Hiện thông báo trong 10 giây
+            notificationFrame.Visible = true
+            wait(10)
+            notificationFrame.Visible = false
+        else
+            yellowTint.Visible = false
+            clearBorders()
+        end
+    end
+end)
